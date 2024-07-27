@@ -7,6 +7,10 @@
 
 #define BAUDRATE 115200
 
+#define UP_MESSAGE "Base up"
+
+#define UP_CHAR '*'
+
 #define SET_SETTINGS_COMMAND 'S'
 #define GET_SETTINGS_COMMAND 'T'
 #define SET_SPEED_COMMAND 'M'
@@ -16,17 +20,26 @@
 #define ALARM_OFF '~'
 
 #define WHEELS_UP "Wheels up"
+#define WHEELS_UP_SIZE 9
+
 #define SENSORS_UP "Sensors up"
+#define SENSORS_UP_SIZE 10
+
+bool requested_sensor_data = false;
 
 char buffer[256];
 u_int8_t pos = 0;
+
+u_int16_t front_left = 1000, front_middle = 1000, front_right = 1000, back_left = 1000, back_middle = 1000, back_right = 1000;
+
+unsigned long last_request = millis();
 
 void await_confirmation() {
     while (true) {
         if (Serial.available()) {
             char c = Serial.read();
 
-            if (c == '*') {
+            if (c == UP_CHAR) {
                 return;
             }
         }
@@ -35,7 +48,7 @@ void await_confirmation() {
 
 bool confirm_wheels() {
     Wire.beginTransmission(WHEELS_ADDRESS);
-    Wire.write('*');
+    Wire.write(UP_CHAR);
     Wire.endTransmission();
 
     delay(100);
@@ -59,12 +72,12 @@ bool confirm_wheels() {
 
 bool confirm_sensors() {
     Wire.beginTransmission(SENSORS_ADDRESS);
-    Wire.write('*');
+    Wire.write(UP_CHAR);
     Wire.endTransmission();
 
     delay(100);
 
-    Wire.requestFrom(SENSORS_ADDRESS, I2C_TRANSACTION_MAX_SIZE);
+    Wire.requestFrom(SENSORS_ADDRESS, SENSORS_UP_SIZE);
 
     delay(100);
 
@@ -75,14 +88,14 @@ bool confirm_sensors() {
     String confirm_buffer = "";
 
     while (Wire.available()) {
-        confirm_buffer += Wire.read();
+        confirm_buffer += (char)Wire.read();
     }
 
     return confirm_buffer == SENSORS_UP;
 }
 
 void confirm_slaves() {
-    bool wheels_confirmed = false, sensors_confirmed = false;
+    bool wheels_confirmed = true, sensors_confirmed = false;
 
     while (!wheels_confirmed || !sensors_confirmed) {
         if (!wheels_confirmed) {
@@ -103,6 +116,8 @@ void confirm_slaves() {
 
         delay(500);
     }
+
+    delay(500);
 }
 
 void handle_uart() {
@@ -113,17 +128,17 @@ void handle_uart() {
             buffer[pos] = 0;
 
             switch (buffer[0]) {
-                case ALARM_ON:
-                    break;
+                // case ALARM_ON:
+                //     break;
 
-                case ALARM_OFF:
-                    break;
+                // case ALARM_OFF:
+                //     break;
 
-                case SET_SETTINGS_COMMAND:
-                    break;
+                // case SET_SETTINGS_COMMAND:
+                //     break;
 
-                case GET_SETTINGS_COMMAND:
-                    break;
+                // case GET_SETTINGS_COMMAND:
+                //     break;
 
                 case SET_SPEED_COMMAND:
                     break;
@@ -140,11 +155,21 @@ void handle_uart() {
 }
 
 void handle_wheels() {
-
+    
 }
 
 void handle_sensors() {
+    if (millis() - last_request > 500) {
+        last_request = millis();
 
+        Wire.requestFrom(SENSORS_ADDRESS, 12);
+
+        delay(10);
+
+        while (Wire.available()) {
+            Serial.print(Wire.read());
+        }
+    }
 }
 
 void setup() {
@@ -153,7 +178,7 @@ void setup() {
 
     await_confirmation();
 
-    Serial.println("Base up");
+    Serial.println(UP_MESSAGE);
 
     Wire.begin();
     confirm_slaves();
