@@ -7,7 +7,11 @@ u_int8_t pos = 0;
 
 u_int16_t front_left = 1000, front_middle = 1000, front_right = 1000, back_left = 1000, back_middle = 1000, back_right = 1000;
 
-unsigned long last_request = millis();
+unsigned long last_sensors_request = millis();
+unsigned long last_wheels_request = millis();
+
+int speedLeft = 0;
+int speedRight = 0;
 
 void await_confirmation() {
     while (true) {
@@ -28,7 +32,9 @@ bool confirm_wheels() {
 
     delay(100);
 
-    Wire.requestFrom(WHEELS_ADDRESS, I2C_TRANSACTION_MAX_SIZE);
+    Serial.println("Request wheels");
+    Wire.requestFrom(WHEELS_ADDRESS, WHEELS_UP_SIZE);
+    Serial.println("End request wheels");
 
     delay(100);
 
@@ -39,7 +45,10 @@ bool confirm_wheels() {
     String confirm_buffer = "";
 
     while (Wire.available()) {
-        confirm_buffer += Wire.read();
+        char c = Wire.read();
+        Serial.print("Received: ");
+        Serial.println(c);
+        confirm_buffer += c;
     }
 
     return confirm_buffer == WHEELS_UP;
@@ -70,7 +79,7 @@ bool confirm_sensors() {
 }
 
 void confirm_slaves() {
-    bool wheels_confirmed = true, sensors_confirmed = false;
+    bool wheels_confirmed = false, sensors_confirmed = false;
 
     while (!wheels_confirmed || !sensors_confirmed) {
         if (!wheels_confirmed) {
@@ -96,6 +105,32 @@ void confirm_slaves() {
 }
 
 void handle_uart() {
+    if (Serial.available() >= 12) {
+        Serial.println("TestSautext");
+
+        const int v1 = Serial.parseInt(), v2 = Serial.parseInt();
+
+        Serial.println(v1);
+        Serial.println(v2);
+
+        speedLeft = v1;
+        speedRight = v2;
+
+        Wire.beginTransmission(WHEELS_ADDRESS);
+        Wire.write((speedLeft >> 8) & 0xFF);
+        Wire.write(speedLeft & 0xFF);
+
+        Wire.write((speedRight >> 8) & 0xFF);
+        Wire.write(speedRight & 0xFF);
+        Wire.endTransmission();
+
+        while (Serial.available()) {
+            Serial.read();
+        }
+    }
+
+    return;
+
     if (Serial.available()) {
         char c = Serial.read();
 
@@ -130,20 +165,35 @@ void handle_uart() {
 }
 
 void handle_wheels() {
-    
+    // if (millis() - last_wheels_request > 30000) {
+    //     last_wheels_request = millis();
+
+    //     speedLeft = -speedLeft;
+    //     speedRight = -speedRight;
+
+    //     Wire.beginTransmission(WHEELS_ADDRESS);
+    //     Wire.write((speedLeft >> 8) & 0xFF);
+    //     Wire.write(speedLeft & 0xFF);
+
+    //     Wire.write((speedRight >> 8) & 0xFF);
+    //     Wire.write(speedRight & 0xFF);
+    //     Wire.endTransmission();
+    // }
 }
 
 void handle_sensors() {
-    if (millis() - last_request > 500) {
-        last_request = millis();
+    if (millis() - last_sensors_request > 500) {
+        last_sensors_request = millis();
 
         Wire.requestFrom(SENSORS_ADDRESS, 12);
 
         delay(10);
 
         while (Wire.available()) {
-            Serial.print("Value: ");
-            Serial.println(Wire.read() << 8 | Wire.read());
+            Wire.read();
+            Wire.read();
+            // Serial.print("Value: ");
+            // Serial.println(Wire.read() << 8 | Wire.read());
         }
     }
 }
